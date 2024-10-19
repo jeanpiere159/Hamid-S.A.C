@@ -1,88 +1,8 @@
 <?php
-// Detectamos la página actual
-$current_page = basename($_SERVER['PHP_SELF']);
-
-// Incluir la conexión a la base de datos
-include('../includes/database.php');
-include('../includes/phpqrcode/qrlib.php');
-
-// Directorios
-$target_dir = "../uploads/";
-$qr_dir = "../qrcodes/";
-
-// Manejo de la solicitud POST
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    header('Content-Type: application/json'); // Asegúrate de que la respuesta sea JSON
-
-    // Verifica que las claves existan antes de usarlas
-    $tipo_documento = $_POST['tipo_documento'] ?? '';
-    $numero_documento = $_POST['numero_documento'] ?? '';
-    $nombres = $_POST['nombres'] ?? '';
-    $apellidos = $_POST['apellidos'] ?? '';
-    $correo = $_POST['correo'] ?? '';
-    $telefono = $_POST['telefono'] ?? '';
-    $direccion = $_POST['direccion'] ?? '';
-
-    // Manejo del archivo PDF
-    $pdf_file = $target_dir . basename($_FILES["pdf"]["name"]);
-    $pdfFileType = strtolower(pathinfo($pdf_file, PATHINFO_EXTENSION));
-
-    if ($pdfFileType != "pdf") {
-        echo json_encode(["success" => false, "message" => "Error: Solo se permiten archivos PDF."]);
-        exit();
-    }
-
-    // Mueve el archivo PDF solo si se subió correctamente
-    if (move_uploaded_file($_FILES["pdf"]["tmp_name"], $pdf_file)) {
-        // Generar el código QR asociado al PDF
-        $qr_code_path = $qr_dir . $numero_documento . '.png';
-
-        // Genera el código QR con la ruta del PDF
-        QRcode::png($pdf_file, $qr_code_path);
-
-        // Inserta los datos en la base de datos
-        $stmt = $conn->prepare("INSERT INTO clientes (tipo_documento, numero_documento, nombres, apellidos, correo, telefono, direccion, pdf_path, qr_code_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sssssssss", $tipo_documento, $numero_documento, $nombres, $apellidos, $correo, $telefono, $direccion, $pdf_file, $qr_code_path);
-        if ($stmt->execute()) {
-            $stmt->close();
-            echo json_encode(["success" => true, "message" => "Cliente creado exitosamente."]);
-        } else {
-            echo json_encode(["success" => false, "message" => "Error en la inserción: " . $stmt->error]);
-        }
-    } else {
-        echo json_encode(["success" => false, "message" => "Error al subir el archivo PDF."]);
-    }
-    exit(); // Asegúrate de salir para evitar que se ejecute el resto del archivo
-}
+    // Detectamos la página actual
+    $current_page = basename($_SERVER['PHP_SELF']);
+    
 ?>
-<script>
-    // Agregar el evento de envío del formulario
-    document.getElementById('crearClienteForm').addEventListener('submit', function(event) {
-        event.preventDefault(); // Evita que se recargue la página
-
-        // Crea un objeto FormData para enviar los datos del formulario
-        const formData = new FormData(this);
-        fetch('clientes.php', {
-    method: 'POST',
-    body: formData
-})
-.then(response => response.text()) // Cambiar a text() para obtener la respuesta como texto
-.then(text => {
-    console.log(text); // Imprimir la respuesta en la consola para depuración
-    const data = JSON.parse(text); // Intenta analizarlo como JSON
-    if (data.success) {
-        alert(data.message);
-        location.reload(); // Recargar la página para ver los cambios
-    } else {
-        alert(data.message);
-    }
-})
-.catch(error => console.error('Error:', error));
-    });
-    </script>
-
-
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -104,6 +24,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </script>
 </head>
 <body class="h-screen bg-gray-50">
+
     <div class="flex h-screen">
         <!-- Sidebar -->
         <aside class="w-1/6 relative text-white flex flex-col items-center">
@@ -112,10 +33,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <img src="/assets/images/logov1-.png" alt="HAMID S.A.C" class="h-24 w-auto">
             </div>
 
+            <!-- Imagen de fondo que cubre toda la altura excepto la parte superior -->
             <div class="absolute inset-0 top-32 w-full h-full">
                 <img src="/assets/images/bar.png" alt="Sidebar Background" class="object-cover h-full w-full">
             </div>
 
+            <!-- Menu (Perfil, Clientes, Portafolio) -->
             <nav class="relative z-10 flex-1 w-full px-6 mt-16">
                 <ul class="space-y-6">
                     <!-- Botón Perfil -->
@@ -150,6 +73,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </ul>
             </nav>
 
+            <!-- Botón Cerrar Sesión -->
             <div class="relative z-10 w-full px-6 top-24">
                 <button class="flex items-center w-full text-sm text-white hover:bg-indigo-600 p-2 rounded-md">
                     <img src="/assets/images/session-Leave.png" alt="Cerrar Sesión" class="h-5 w-5 mr-2">
@@ -158,12 +82,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </aside>
 
+        <!-- Main Content -->
         <main class="flex-1 p-10">
             <header class="flex justify-between items-center">
                 <div>
                     <h1 class="text-3xl font-bold text-indigo-700">Hola, Vicente Ñañez</h1>
                     <p class="text-gray-600">Nos alegra verte otra vez.</p>
                 </div>
+                <!-- User Profile -->
                 <div class="flex items-center">
                     <img src="/assets/images/perfil.png" alt="User Avatar" class="h-10 w-10 rounded-full mr-3">
                     <div>
@@ -188,6 +114,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                 </div>
 
+                <!-- Tabla de Clientes -->
                 <div class="overflow-x-auto">
                     <table class="min-w-full bg-transparent rounded-lg shadow-md">
                         <thead>
@@ -205,31 +132,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         </thead>
                         <tbody>
                         <?php
+                        include('../includes/database.php');
+                        
                         // Consulta para obtener los clientes
                         $sql = "SELECT * FROM clientes";
                         $result = $conn->query($sql);
-
-                        if ($result) { // Verifica que $result no sea null
-                            if ($result->num_rows > 0) {
-                                while ($row = $result->fetch_assoc()) {
-                                    echo "<tr>";
-                                    echo "<td class='p-4'>" . htmlspecialchars($row['id']) . "</td>";
-                                    echo "<td class='p-4'>" . htmlspecialchars($row['tipo_documento']) . "</td>";
-                                    echo "<td class='p-4'>" . htmlspecialchars($row['numero_documento']) . "</td>";
-                                    echo "<td class='p-4'>" . htmlspecialchars($row['nombres']) . "</td>";
-                                    echo "<td class='p-4'>" . htmlspecialchars($row['apellidos']) . "</td>";
-                                    echo "<td class='p-4'><img src='../assets/images/ver_detalles.png' alt='Ver Detalles' class='h-7 w-22 inline'></td>";
-                                    echo "<td class='p-4'><a href='eliminar_cliente.php?id=" . htmlspecialchars($row['id']) . "'><img src='../assets/images/eliminar.png' alt='Eliminar' class='h-7 w-22 inline'></a></td>";
-                                    echo "<td class='p-4'><a href='editar_cliente.php?id=" . htmlspecialchars($row['id']) . "'><img src='../assets/images/editar.png' alt='Editar' class='h-10 w-10 inline'></a></td>";
-                                    echo "<td class='p-4'><img src='" . htmlspecialchars($row['qr_code_path']) . "' alt='QR Code' class='h-16 w-16'></td>";
-                                    echo "</tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='9' class='text-center p-4'>No hay clientes aún</td></tr>";
+                        
+                        if ($result->num_rows > 0) {
+                            while ($row = $result->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td class='p-4'>" . $row['id'] . "</td>";
+                                echo "<td class='p-4'>" . $row['tipo_documento'] . "</td>";
+                                echo "<td class='p-4'>" . $row['numero_documento'] . "</td>";
+                                echo "<td class='p-4'>" . $row['nombres'] . "</td>";
+                                echo "<td class='p-4'>" . $row['apellidos'] . "</td>";
+                                echo "<td class='p-4'><a href='ver_detalles.php?id=" . $row['id'] . "'><img src='../assets/images/ver_detalles.png' alt='Ver Detalles' class='h-7 w-22 inline'></a></td>";
+                                echo "<td class='p-4'><a href='eliminar_cliente.php?id=" . $row['id'] . "'><img src='../assets/images/eliminar.png' alt='Eliminar' class='h-7 w-22 inline'></a></td>";
+                                echo "<td class='p-4'><a href='editar_cliente.php?id=" . $row['id'] . "'><img src='../assets/images/editar.png' alt='Editar' class='h-10 w-10 inline'></a></td>";
+                                echo "<td class='p-4'><img src='" . $row['qr_code_path'] . "' alt='QR Code' class='h-16 w-16'></td>";
+                                echo "</tr>";
                             }
                         } else {
-                            // En caso de que la consulta falle
-                            echo "<tr><td colspan='9' class='text-center p-4'>Error en la consulta: " . $conn->error . "</td></tr>";
+                            echo "<tr><td colspan='9' class='text-center p-4'>No hay clientes aún</td></tr>";
                         }
                         ?>
                         </tbody>
@@ -257,7 +181,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 En esta sección usted puede registrar sus datos para gestionar a sus postulantes.
             </p>
 
-            <form id="crearClienteForm" action="clientes.php" method="POST" enctype="multipart/form-data">
+            <form action="clientes.php" method="POST" enctype="multipart/form-data">
                 <div class="mb-4">
                     <label class="block text-sm text-gray-700">Tipo de Documento</label>
                     <select name="tipo_documento" class="w-full px-4 py-2 border rounded-md" required>
@@ -309,8 +233,51 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </form>
         </div>
     </div>
-
 </body>
 </html>
 
+<?php
+include('../includes/phpqrcode/qrlib.php');
+include('../includes/database.php');
 
+// Directorios
+$target_dir = "../uploads/";
+$qr_dir = "../qrcodes/";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    $tipo_documento = $_POST['tipo_documento'];
+    $numero_documento = $_POST['numero_documento'];
+    $nombres = $_POST['nombres'];
+    $apellidos = $_POST['apellidos'];
+    $correo = $_POST['correo'];
+    $telefono = $_POST['telefono'];
+    $direccion = $_POST['direccion'];
+
+    // Manejar el archivo PDF
+    $pdf_file = $target_dir . basename($_FILES["pdf"]["name"]);
+    $pdfFileType = strtolower(pathinfo($pdf_file, PATHINFO_EXTENSION));
+
+    if ($pdfFileType != "pdf") {
+        echo "Error: Solo se permiten archivos PDF.";
+        exit();
+    }
+
+    // Subir el archivo PDF
+    if (move_uploaded_file($_FILES["pdf"]["tmp_name"], $pdf_file)) {
+        // Generar el código QR asociado al PDF
+        $qr_code_path = $qr_dir . $numero_documento . '.png';
+        QRcode::png($pdf_file, $qr_code_path);
+
+        // Guardar los datos en la base de datos
+        $stmt = $conn->prepare("INSERT INTO clientes (tipo_documento, numero_documento, nombres, apellidos, correo, telefono, direccion, pdf_path, qr_code_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssssssss", $tipo_documento, $numero_documento, $nombres, $apellidos, $correo, $telefono, $direccion, $pdf_file, $qr_code_path);
+        $stmt->execute();
+        $stmt->close();
+
+        echo "Cliente creado exitosamente. <a href='$qr_code_path'>Ver QR</a>";
+    } else {
+        echo "Error al subir el archivo PDF.";
+    }
+}
+?>
